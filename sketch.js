@@ -8,18 +8,15 @@ let wasPinching = false;
 let imgStar, imgButterfly;
 
 function preload() {
-  // 加载字体和图片资源
   myFont = loadFont('https://cdnjs.cloudflare.com/ajax/libs/topcoat/0.8.0/font/SourceSansPro-Bold.otf');
   imgStar = loadImage('Star.png');
   imgButterfly = loadImage('Butterfly.png');
 }
 
 function setup() {
-  // 创建自适应全屏画布
   createCanvas(windowWidth, windowHeight, WEBGL);
   textFont(myFont);
   
-  // MediaPipe 手势识别配置
   hands = new Hands({
     locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
   });
@@ -31,17 +28,14 @@ function setup() {
   });
   hands.onResults(results => { handData = results.multiHandLandmarks; });
 
-  // 摄像头配置
   capture = createCapture(VIDEO);
   capture.size(640, 480);
-  capture.hide(); // 隐藏 HTML 原始视频标签
+  capture.hide(); 
   processVideo();
   
-  // 初始化萤火虫
   for(let i=0; i<12; i++) createFirefly(random(width), random(height));
 }
 
-// 窗口大小改变时自动调整
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
 }
@@ -54,7 +48,7 @@ async function processVideo() {
 function draw() {
   background(5, 5, 15); 
 
-  // 1. 绘制背景视频 (推远并镜像放大)
+  // 1. 背景视频
   push();
   translate(0, 0, -500); 
   scale(-2.8, 2.8); 
@@ -65,7 +59,7 @@ function draw() {
 
   drawAndIdentifyFireflies();
 
-  // 2. 渲染所有森林元素
+  // 2. 渲染森林元素
   for (let i = 0; i < elements.length; i++) {
     let el = elements[i];
     let prevEl = i > 0 ? elements[i-1] : null;
@@ -76,19 +70,17 @@ function draw() {
     else if (el.type === "grass") drawMagicGrass(el);
   }
 
-  // 自动清理旧元素保持流畅
   if (elements.length > 350) elements.shift();
 
   handleInput(); 
   drawUI(); 
 }
 
-// --- 🧠 核心：手势交互与菜单检测 ---
+// --- 🧠 核心：侧边栏手势检测 ---
 function handleInput() {
   if (handData && handData.length > 0) {
     let hand = handData[0];
     
-    // 映射手部坐标到 WEBGL 画布
     let rawX = (1 - hand[8].x) * width - width / 2;
     let rawY = hand[8].y * height - height / 2;
     let thumbX = (1 - hand[4].x) * width - width / 2;
@@ -98,7 +90,7 @@ function handleInput() {
     smoothY += (rawY - smoothY) * 0.25;
     let isPinching = dist(rawX, rawY, thumbX, thumbY) < 45;
 
-    // 绘制指尖引导点 (深度设为 250 确保置顶)
+    // 引导点
     push();
     translate(smoothX, smoothY, 250); 
     noStroke();
@@ -110,16 +102,20 @@ function handleInput() {
     }
     pop();
 
-    // 转换为屏幕坐标用于菜单检测
     let screenX = smoothX + width / 2;
     let screenY = smoothY + height / 2;
 
-    // 修改：将菜单感应高度增加到 140 像素，方便触碰
-    if (screenY < 140) { 
-      let idx = floor(screenX / (width / 7));
+    // 修改检测逻辑：如果手指在屏幕左侧 100 像素内
+    if (screenX < 100) { 
+      let btnH = height / 7;
+      let idx = floor(screenY / btnH);
       let modes = ["grass", "flower", "vine", "butterfly", "star", "firefly", "clear"];
-      if (idx === 6) { elements = []; fireflies = []; }
-      else if (idx >= 0 && idx < 7) currentMode = modes[idx];
+      
+      if (idx === 6 && isPinching) { // Clear 需要 pinch 确认，防止误触
+        elements = []; fireflies = []; 
+      } else if (idx >= 0 && idx < 6) {
+        currentMode = modes[idx];
+      }
     } else {
       if (isPinching) {
         if (currentMode === "firefly" && frameCount % 8 === 0) createFirefly(screenX, screenY);
@@ -131,46 +127,46 @@ function handleInput() {
   }
 }
 
-// --- 🌿 UI 菜单：拉低位置以确保可见 ---
+// --- 🌿 UI 菜单：左侧垂直排列 ---
 function drawUI() {
   push(); 
-  // 关键：将 Y 轴向下偏移 40 像素，Z 轴设为 300
-  translate(-width/2, -height/2 + 40, 300); 
+  // 坐标移至左上角
+  translate(-width/2, -height/2, 300); 
   
   let icons = ["🌱", "🌸", "🌿", "🦋", "✨", "🔥", "🗑️"];
   let labels = ["Grass", "Flower", "Vine", "Butterfly", "Star", "Firefly", "Clear"];
-  let btnW = width / 7;
+  let btnH = height / 7; // 按钮高度平分整个屏幕高度
+  let btnW = 90;        // 宽度固定为 90
   
   for (let i = 0; i < 7; i++) {
     let isSelected = (currentMode === ["grass", "flower", "vine", "butterfly", "star", "firefly", "clear"][i]);
     
-    // 绘制按钮背景
-    fill(isSelected ? 50 : 25, 230); 
-    stroke(0, 255, 255, 180); 
+    // 按钮底色
+    fill(isSelected ? 60 : 25, 200); 
+    stroke(0, 255, 255, 150); 
     strokeWeight(1.5);
-    rect(i * btnW, 0, btnW, 95, 0, 0, 15, 15); // 加大圆角
+    // 绘制垂直矩形
+    rect(0, i * btnH, btnW, btnH, 0, 15, 15, 0); 
     
-    // 绘制图标
+    // 图标和文字
     fill(255); 
     noStroke(); 
     textAlign(CENTER, CENTER); 
-    textSize(28); 
-    text(icons[i], i * btnW + btnW/2, 35);
+    textSize(26); 
+    text(icons[i], btnW/2, i * btnH + btnH/2 - 15);
+    textSize(11); 
+    text(labels[i], btnW/2, i * btnH + btnH/2 + 15);
     
-    // 绘制文字
-    textSize(13); 
-    text(labels[i], i * btnW + btnW/2, 70);
-    
-    // 选中后的高亮条
+    // 选中侧边亮条
     if(isSelected) {
       fill(0, 255, 255);
-      rect(i * btnW, 90, btnW, 5);
+      rect(btnW - 5, i * btnH + 10, 5, btnH - 20);
     }
   }
   pop();
 }
 
-// --- 元素绘制逻辑 (保持原有精华) ---
+// --- 以下功能函数保持不变 ---
 function createNew(x, y, type) {
   let col, targetSize, angle = 0, side = random(1), hasLeaf = true;
   let finalX = x, finalY = y;
