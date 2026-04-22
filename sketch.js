@@ -15,29 +15,17 @@ function preload() {
 
 function setup() {
   createCanvas(windowWidth, windowHeight, WEBGL);
-  
-  hands = new Hands({
-    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-  });
-  hands.setOptions({ 
-    maxNumHands: 1, 
-    modelComplexity: 0, 
-    minDetectionConfidence: 0.6, 
-    minTrackingConfidence: 0.6 
-  });
+  hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+  hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
   hands.onResults(results => { handData = results.multiHandLandmarks; });
-
   capture = createCapture(VIDEO);
   capture.size(640, 480);
   capture.hide(); 
   processVideo();
-  
   for(let i=0; i<15; i++) createFirefly(random(width), random(height));
 }
 
-function windowResized() {
-  resizeCanvas(windowWidth, windowHeight);
-}
+function windowResized() { resizeCanvas(windowWidth, windowHeight); }
 
 async function processVideo() {
   if (capture.elt.readyState === 4) await hands.send({ image: capture.elt });
@@ -52,15 +40,10 @@ function setMode(mode) {
   if(target) target.classList.add('active');
 }
 
-function clearCanvas() {
-  elements = [];
-  fireflies = [];
-}
+function clearCanvas() { elements = []; fireflies = []; }
 
 function draw() {
   background(5, 5, 20); 
-
-  // 1. 背景视频
   push();
   translate(0, 0, -700); 
   scale(-3.5, 3.5); 
@@ -71,112 +54,138 @@ function draw() {
 
   drawAndIdentifyFireflies();
 
-  // 2. 渲染森林元素
-  for (let i = 0; i < elements.length; i++) {
-    let el = elements[i];
-    let prevEl = i > 0 ? elements[i-1] : null;
+  // 分组绘制藤蔓以保持曲线连贯
+  let vinePoints = elements.filter(el => el.type === "vine");
+  if (vinePoints.length > 1) drawSmoothVine(vinePoints);
+
+  // 绘制其他元素
+  for (let el of elements) {
     if (el.type === "star") drawStar(el);
     else if (el.type === "flower") drawFlower(el);
     else if (el.type === "butterfly") drawButterfly(el);
-    else if (el.type === "vine") drawVine(el, prevEl); 
     else if (el.type === "grass") drawMagicGrass(el);
   }
 
-  if (elements.length > 500) elements.shift(); // 增加元素上限以匹配更高的藤蔓密度
-
+  if (elements.length > 500) elements.shift();
   handleInput(); 
 }
 
 function handleInput() {
   if (handData && handData.length > 0) {
     let hand = handData[0];
-    
-    // 映射到屏幕坐标
     let screenX = (1 - hand[8].x) * width;
     let screenY = hand[8].y * height;
-    
-    // 转换为 WEBGL 坐标用于后续计算
-    let webglX = screenX - width / 2;
-    let webglY = screenY - height / 2;
-    
     let thumbX = (1 - hand[4].x) * width;
     let thumbY = hand[4].y * height;
+    let isPinching = dist(screenX, screenY, thumbX, thumbY) < 65;
 
-    smoothX += (webglX - smoothX) * 0.25;
-    smoothY += (webglY - smoothY) * 0.25;
-    
-    let isPinching = dist(screenX, screenY, thumbX, thumbY) < 60;
-
-    // --- 修复：大屏按钮选择逻辑 ---
     if (screenX < 250 && isPinching && !wasPinching) {
-      let btnH = height / 7;
-      let idx = floor(screenY / btnH);
+      let idx = floor(screenY / (height / 7));
       let modes = ["grass", "flower", "vine", "butterfly", "star", "firefly"];
       if (idx >= 0 && idx < 6) setMode(modes[idx]);
       else if (idx === 6) clearCanvas();
     } 
-    // --- 绘制逻辑 ---
     else if (isPinching) {
       if (currentMode === "firefly" && frameCount % 10 === 0) createFirefly(screenX, screenY);
-      else if (currentMode === "butterfly" && frameCount % 20 === 0) createNew(screenX, screenY, "butterfly");
-      // --- 核心：提高藤蔓生成采样率以增强顺滑度 ---
+      else if (currentMode === "butterfly" && frameCount % 25 === 0) createNew(screenX, screenY, "butterfly");
       else if (currentMode === "vine" && frameCount % 2 === 0) createNew(screenX, screenY, "vine");
       else if (currentMode !== "flower" && currentMode !== "butterfly" && currentMode !== "vine" && frameCount % 4 === 0) createNew(screenX, screenY, currentMode);
     }
-
     if (wasPinching && !isPinching && currentMode === "flower") createNew(screenX, screenY, "flower");
-    
     wasPinching = isPinching;
   }
 }
 
 function createNew(x, y, type) {
   let col, targetSize, leaves = [];
-  
-  if (type === "star") {
-    targetSize = random(10, 25);
-    col = color(255, 255, 200);
-  } else if (type === "vine") {
-    // 霓虹绿、青色系列
-    col = color(random([0, 50]), 255, random([150, 255]));
-    targetSize = random(15, 30);
-    // 随机生成叶子数据 - --- 核心：大幅增加叶子基础尺寸 ---
-    if (random() > 0.3) { // 提高一点叶子生成的概率
-      leaves.push({
-        side: random() > 0.5 ? 1 : -1,
-        size: random(25, 50), // 尺寸从 5-15 增加到 25-50
-        col: color(random(0, 100), 255, random(100, 200), 220) // 增加透明度增加梦幻感
-      });
+  if (type === "vine") {
+    col = color(0, 255, 180);
+    targetSize = random(15, 25);
+    // 降低叶子密度：只有 20% 的概率生成叶子
+    if (random() > 0.8) {
+      leaves.push({ side: random() > 0.5 ? 1 : -1, size: random(35, 60), col: color(random(0, 50), 255, random(100, 200), 200) });
     }
   } else if (type === "flower") {
-    col = color(random(150, 255), random(50, 255), random(200, 255));
-    targetSize = random(40, 70);
+    // 随机花朵主色调
+    let base = random(360);
+    targetSize = random(50, 85);
+    col = {
+      outer: color(random(100, 255), 50, 255, 180),   // 外层：紫色/蓝色系
+      middle: color(255, random(100, 200), 50, 200), // 第二层：橙色/黄色系
+      inner: color(255, 255, 200)                    // 中心：浅色
+    };
   } else if (type === "grass") {
-    col = color(random(50, 150), 255, 50);
-    targetSize = random(60, 100);
-  } else if (type === "butterfly") {
-    targetSize = random(15, 25);
+    col = color(0, 255, 100);
+    targetSize = random(70, 110);
+  } else {
+    col = color(255);
+    targetSize = random(20, 30);
   }
   
-  elements.push({ 
-    x: x, y: y, 
-    type: type, 
-    size: 0, 
-    maxSize: targetSize, 
-    offset: random(1000), 
-    c: col,
-    leaves: leaves
-  });
+  elements.push({ x: x, y: y, type: type, size: 0, maxSize: targetSize, offset: random(1000), c: col, leaves: leaves });
 }
 
-function drawStar(el) {
-  if (el.size < el.maxSize) el.size += 0.5;
+// --- 🌸 核心修改：三层不同颜色的梦幻花朵 ---
+function drawFlower(el) {
+  if (el.size < el.maxSize) el.size += 2;
   push();
-  translate(el.x - width/2, el.y - height/2, 1);
-  imageMode(CENTER);
-  let b = sin(frameCount * 0.1 + el.offset);
-  tint(el.c.levels[0], el.c.levels[1], el.c.levels[2], map(b, -1, 1, 100, 255));
-  image(imgStar, 0, 0, el.size, el.size);
+  translate(el.x - width/2, el.y - height/2, 2);
+  noStroke();
+  
+  // 第一层：外围大花瓣
+  fill(el.c.outer);
+  for (let i = 0; i < 8; i++) {
+    rotate(PI/4);
+    ellipse(0, el.size/2, el.size/1.5, el.size);
+  }
+  
+  // 第二层：中间稍小花瓣（不同颜色）
+  fill(el.c.middle);
+  for (let i = 0; i < 8; i++) {
+    rotate(PI/4);
+    ellipse(0, el.size/3, el.size/2.5, el.size/1.5);
+  }
+  
+  // 第三层：中心花蕊发光
+  fill(el.c.inner);
+  circle(0, 0, el.size/4);
+  pop();
+}
+
+// --- 🌿 核心修改：丝滑曲线藤蔓 + 心形🧡叶子 ---
+function drawSmoothVine(points) {
+  push();
+  noFill();
+  stroke(0, 255, 180, 180);
+  strokeWeight(5);
+  beginShape();
+  // 使用 curveVertex 实现极其顺滑的曲线
+  curveVertex(points[0].x - width/2, points[0].y - height/2);
+  for (let p of points) {
+    curveVertex(p.x - width/2, p.y - height/2);
+    // 在绘制曲线的同时，记录叶子的位置
+    if (p.leaves.length > 0) drawHeartLeaf(p);
+  }
+  curveVertex(points[points.length-1].x - width/2, points[points.length-1].y - height/2);
+  endShape();
+  pop();
+}
+
+function drawHeartLeaf(p) {
+  push();
+  translate(p.x - width/2, p.y - height/2, 1);
+  let leaf = p.leaves[0];
+  rotate(leaf.side * QUARTER_PI + sin(frameCount*0.02)*0.2);
+  fill(leaf.col);
+  noStroke();
+  
+  // 绘制心形🧡结构的叶子
+  let s = leaf.size;
+  beginShape();
+  vertex(0, 0);
+  bezierVertex(-s/2, -s/2, -s, s/3, 0, s);
+  bezierVertex(s, s/3, s/2, -s/2, 0, 0);
+  endShape(CLOSE);
   pop();
 }
 
@@ -184,98 +193,51 @@ function drawMagicGrass(el) {
   if (el.size < el.maxSize) el.size += 3;
   push();
   translate(el.x - width/2, el.y - height/2, 0);
-  let sw = sin(frameCount * 0.05 + el.offset) * 10;
+  let sw = sin(frameCount * 0.05 + el.offset) * 15;
+  fill(0, 255, 150, 150);
   noStroke();
-  fill(el.c.levels[0], el.c.levels[1], el.c.levels[2], 180);
   beginShape();
-  vertex(-8, 0);
-  vertex(8, 0);
-  bezierVertex(5, -el.size*0.3, sw, -el.size*0.6, sw, -el.size);
+  vertex(-10, 0);
+  vertex(10, 0);
+  bezierVertex(5, -el.size*0.4, sw, -el.size*0.7, sw, -el.size);
   endShape(CLOSE);
   pop();
 }
 
-function drawFlower(el) {
-  if (el.size < el.maxSize) el.size += 2;
+function drawStar(el) {
+  if (el.size < el.maxSize) el.size += 0.5;
   push();
-  translate(el.x - width/2, el.y - height/2, 2);
-  noStroke();
-  for (let i = 0; i < 6; i++) {
-    rotate(PI/3);
-    fill(el.c.levels[0], el.c.levels[1], el.c.levels[2], 150);
-    ellipse(0, el.size/2, el.size/2, el.size);
-    fill(255, 255, 255, 100);
-    ellipse(0, el.size/2, el.size/4, el.size/1.5);
-  }
-  fill(255, 255, 0, 200);
-  circle(0, 0, el.size/4);
+  translate(el.x - width/2, el.y - height/2, 1);
+  let b = sin(frameCount * 0.1 + el.offset);
+  tint(255, 255, 150, map(b, -1, 1, 100, 255));
+  image(imgStar, 0, 0, el.size, el.size);
   pop();
-}
-
-function drawVine(el, prevEl) {
-  // --- 核心：增加采样点之间的连接距离限制，防止断裂 ---
-  if (prevEl && prevEl.type === "vine" && dist(el.x, el.y, prevEl.x, prevEl.y) < 100) {
-    push();
-    stroke(el.c);
-    strokeWeight(4); // 茎稍微加粗
-    line(prevEl.x - width/2, prevEl.y - height/2, 0, el.x - width/2, el.y - height/2, 0);
-    
-    // 绘制超级大叶子
-    if (el.leaves.length > 0) {
-      for (let leaf of el.leaves) {
-        push();
-        translate(el.x - width/2, el.y - height/2, 1);
-        rotate(leaf.side * QUARTER_PI);
-        noStroke();
-        fill(leaf.col);
-        // 调整叶子形状和位置，使其更自然
-        ellipse(leaf.side * 15, 0, leaf.size, leaf.size/1.8);
-        pop();
-      }
-    }
-    pop();
-  }
 }
 
 function drawButterfly(el) {
   if (!imgButterfly) return;
   if (el.size < el.maxSize) el.size += 0.5;
-  el.y -= 1.5;
+  el.y -= 1.2;
   el.x += sin(frameCount * 0.05 + el.offset) * 2;
   push();
   translate(el.x - width/2, el.y - height/2, 10);
-  let flap = sin(frameCount * 0.3 + el.offset);
-  scale(flap, 1); 
-  tint(200, 255, 255, 230);
-  imageMode(CENTER);
+  scale(sin(frameCount * 0.3 + el.offset), 1); 
+  tint(200, 255, 255, 200);
   image(imgButterfly, 0, 0, el.size, el.size);
   pop();
 }
 
 function createFirefly(x, y) {
-  fireflies.push({ 
-    x: x, y: y, 
-    vx: random(-0.8, 0.8), vy: random(-0.8, 0.8), 
-    size: random(4, 8), 
-    offset: random(1000),
-    c: color(random(150, 255), 255, random(150, 255))
-  });
+  fireflies.push({ x: x, y: y, vx: random(-0.5, 0.5), vy: random(-0.5, 0.5), size: random(4, 8), offset: random(1000), c: color(200, 255, 100) });
 }
 
 function drawAndIdentifyFireflies() {
   push();
   translate(-width/2, -height/2, 60);
   for(let f of fireflies) {
-    f.x += f.vx + sin(frameCount * 0.02 + f.offset) * 0.5;
-    f.y += f.vy;
-    if(f.x < 0 || f.x > width) f.vx *= -1;
-    if(f.y < 0 || f.y > height) f.vy *= -1;
-    
-    fill(f.c.levels[0], f.c.levels[1], f.c.levels[2], 200);
-    noStroke();
+    f.x += f.vx; f.y += f.vy;
+    fill(f.c); noStroke();
     circle(f.x, f.y, f.size);
-    fill(255, 255, 255, 150);
-    circle(f.x, f.y, f.size/2);
   }
   pop();
 }
