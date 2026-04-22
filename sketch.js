@@ -82,7 +82,7 @@ function draw() {
     else if (el.type === "grass") drawMagicGrass(el);
   }
 
-  if (elements.length > 400) elements.shift();
+  if (elements.length > 500) elements.shift(); // 增加元素上限以匹配更高的藤蔓密度
 
   handleInput(); 
 }
@@ -108,7 +108,6 @@ function handleInput() {
     let isPinching = dist(screenX, screenY, thumbX, thumbY) < 60;
 
     // --- 修复：大屏按钮选择逻辑 ---
-    // 如果手指在左侧区域且执行了捏合动作
     if (screenX < 250 && isPinching && !wasPinching) {
       let btnH = height / 7;
       let idx = floor(screenY / btnH);
@@ -120,7 +119,9 @@ function handleInput() {
     else if (isPinching) {
       if (currentMode === "firefly" && frameCount % 10 === 0) createFirefly(screenX, screenY);
       else if (currentMode === "butterfly" && frameCount % 20 === 0) createNew(screenX, screenY, "butterfly");
-      else if (currentMode !== "flower" && currentMode !== "butterfly" && frameCount % 4 === 0) createNew(screenX, screenY, currentMode);
+      // --- 核心：提高藤蔓生成采样率以增强顺滑度 ---
+      else if (currentMode === "vine" && frameCount % 2 === 0) createNew(screenX, screenY, "vine");
+      else if (currentMode !== "flower" && currentMode !== "butterfly" && currentMode !== "vine" && frameCount % 4 === 0) createNew(screenX, screenY, currentMode);
     }
 
     if (wasPinching && !isPinching && currentMode === "flower") createNew(screenX, screenY, "flower");
@@ -139,23 +140,22 @@ function createNew(x, y, type) {
     // 霓虹绿、青色系列
     col = color(random([0, 50]), 255, random([150, 255]));
     targetSize = random(15, 30);
-    // 随机生成叶子数据
-    if (random() > 0.4) {
+    // 随机生成叶子数据 - --- 核心：大幅增加叶子基础尺寸 ---
+    if (random() > 0.3) { // 提高一点叶子生成的概率
       leaves.push({
         side: random() > 0.5 ? 1 : -1,
-        size: random(5, 15),
-        col: color(random(0, 100), 255, random(100, 200))
+        size: random(25, 50), // 尺寸从 5-15 增加到 25-50
+        col: color(random(0, 100), 255, random(100, 200), 220) // 增加透明度增加梦幻感
       });
     }
   } else if (type === "flower") {
-    // 梦幻霓虹色渐变
     col = color(random(150, 255), random(50, 255), random(200, 255));
     targetSize = random(40, 70);
   } else if (type === "grass") {
     col = color(random(50, 150), 255, 50);
     targetSize = random(60, 100);
   } else if (type === "butterfly") {
-    targetSize = random(15, 25); // 蝴蝶变小
+    targetSize = random(15, 25);
   }
   
   elements.push({ 
@@ -186,12 +186,11 @@ function drawMagicGrass(el) {
   translate(el.x - width/2, el.y - height/2, 0);
   let sw = sin(frameCount * 0.05 + el.offset) * 10;
   noStroke();
-  // 霓虹渐变感：底部宽，顶部尖
   fill(el.c.levels[0], el.c.levels[1], el.c.levels[2], 180);
   beginShape();
-  vertex(-8, 0); // 底部左
-  vertex(8, 0);  // 底部右
-  bezierVertex(5, -el.size*0.3, sw, -el.size*0.6, sw, -el.size); // 尖端
+  vertex(-8, 0);
+  vertex(8, 0);
+  bezierVertex(5, -el.size*0.3, sw, -el.size*0.6, sw, -el.size);
   endShape(CLOSE);
   pop();
 }
@@ -203,26 +202,25 @@ function drawFlower(el) {
   noStroke();
   for (let i = 0; i < 6; i++) {
     rotate(PI/3);
-    // 梦幻渐变感：花瓣带一点透明度和颜色交替
     fill(el.c.levels[0], el.c.levels[1], el.c.levels[2], 150);
     ellipse(0, el.size/2, el.size/2, el.size);
     fill(255, 255, 255, 100);
     ellipse(0, el.size/2, el.size/4, el.size/1.5);
   }
-  // 花蕊发光
   fill(255, 255, 0, 200);
   circle(0, 0, el.size/4);
   pop();
 }
 
 function drawVine(el, prevEl) {
-  if (prevEl && prevEl.type === "vine" && dist(el.x, el.y, prevEl.x, prevEl.y) < 80) {
+  // --- 核心：增加采样点之间的连接距离限制，防止断裂 ---
+  if (prevEl && prevEl.type === "vine" && dist(el.x, el.y, prevEl.x, prevEl.y) < 100) {
     push();
     stroke(el.c);
-    strokeWeight(3);
+    strokeWeight(4); // 茎稍微加粗
     line(prevEl.x - width/2, prevEl.y - height/2, 0, el.x - width/2, el.y - height/2, 0);
     
-    // 绘制随机小叶子
+    // 绘制超级大叶子
     if (el.leaves.length > 0) {
       for (let leaf of el.leaves) {
         push();
@@ -230,7 +228,8 @@ function drawVine(el, prevEl) {
         rotate(leaf.side * QUARTER_PI);
         noStroke();
         fill(leaf.col);
-        ellipse(leaf.side * 10, 0, leaf.size, leaf.size/2);
+        // 调整叶子形状和位置，使其更自然
+        ellipse(leaf.side * 15, 0, leaf.size, leaf.size/1.8);
         pop();
       }
     }
@@ -272,7 +271,6 @@ function drawAndIdentifyFireflies() {
     if(f.x < 0 || f.x > width) f.vx *= -1;
     if(f.y < 0 || f.y > height) f.vy *= -1;
     
-    // 萤火虫发光效果
     fill(f.c.levels[0], f.c.levels[1], f.c.levels[2], 200);
     noStroke();
     circle(f.x, f.y, f.size);
