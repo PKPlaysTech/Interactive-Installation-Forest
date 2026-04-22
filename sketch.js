@@ -3,7 +3,6 @@ let elements = [];
 let fireflies = []; 
 let currentMode = "flower"; 
 let capture, hands, myFont;
-let smoothX = 0, smoothY = 0;
 let wasPinching = false;
 let imgStar, imgButterfly;
 
@@ -18,11 +17,12 @@ function setup() {
   hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
   hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
   hands.onResults(results => { handData = results.multiHandLandmarks; });
+
   capture = createCapture(VIDEO);
   capture.size(640, 480);
   capture.hide(); 
   processVideo();
-  for(let i=0; i<20; i++) createFirefly(random(width), random(height));
+  for(let i=0; i<15; i++) createFirefly(random(width), random(height));
 }
 
 function windowResized() { resizeCanvas(windowWidth, windowHeight); }
@@ -43,32 +43,32 @@ function setMode(mode) {
 function clearCanvas() { elements = []; fireflies = []; }
 
 function draw() {
-  background(5, 5, 25); 
-  
-  // 1. 背景视频层
+  background(5, 5, 20); 
+
+  // 1. 背景层
   push();
   translate(0, 0, -800); 
   scale(-3.8, 3.8); 
   imageMode(CENTER);
-  tint(70, 100, 255, 50); 
+  tint(80, 120, 255, 60); 
   image(capture, 0, 0);
   pop();
 
   drawAndIdentifyFireflies();
 
-  // 2. 绘制藤蔓的茎（先画线，确保连续性）
-  drawVinePath();
+  // 2. 绘制森林
+  for (let i = 0; i < elements.length; i++) {
+    let el = elements[i];
+    let prevEl = (i > 0) ? elements[i-1] : null;
 
-  // 3. 绘制其他所有元素
-  for (let el of elements) {
-    if (el.type === "star") drawStar(el);
-    else if (el.type === "flower") drawFlower(el);
-    else if (el.type === "butterfly") drawButterfly(el);
+    if (el.type === "flower") drawFlower(el);
+    else if (el.type === "vine") drawVine(el, prevEl);
     else if (el.type === "grass") drawMagicGrass(el);
-    else if (el.type === "vine") drawVineLeaves(el); // 只画该点的叶子
+    else if (el.type === "star") drawStar(el);
+    else if (el.type === "butterfly") drawButterfly(el);
   }
 
-  if (elements.length > 600) elements.shift();
+  if (elements.length > 500) elements.shift();
   handleInput(); 
 }
 
@@ -81,16 +81,18 @@ function handleInput() {
     let thumbY = hand[4].y * height;
     let isPinching = dist(screenX, screenY, thumbX, thumbY) < 70;
 
-    if (screenX < 250 && isPinching && !wasPinching) {
-      let idx = floor(screenY / (height / 7));
+    // 按钮选择逻辑 (大屏优化)
+    if (screenX < 260 && isPinching && !wasPinching) {
+      let idx = floor(screenY / (height / 7.5));
       let modes = ["grass", "flower", "vine", "butterfly", "star", "firefly"];
       if (idx >= 0 && idx < 6) setMode(modes[idx]);
-      else if (idx === 6) clearCanvas();
+      else if (idx >= 6) clearCanvas();
     } 
+    // 生成逻辑
     else if (isPinching) {
-      if (currentMode === "firefly" && frameCount % 10 === 0) createFirefly(screenX, screenY);
+      if (currentMode === "vine" && frameCount % 2 === 0) createNew(screenX, screenY, "vine");
+      else if (currentMode === "firefly" && frameCount % 10 === 0) createFirefly(screenX, screenY);
       else if (currentMode === "butterfly" && frameCount % 30 === 0) createNew(screenX, screenY, "butterfly");
-      else if (currentMode === "vine" && frameCount % 2 === 0) createNew(screenX, screenY, "vine");
       else if (currentMode !== "flower" && currentMode !== "butterfly" && currentMode !== "vine" && frameCount % 4 === 0) createNew(screenX, screenY, currentMode);
     }
     if (wasPinching && !isPinching && currentMode === "flower") createNew(screenX, screenY, "flower");
@@ -99,51 +101,40 @@ function handleInput() {
 }
 
 function createNew(x, y, type) {
-  let col, targetSize, leafData = [];
+  let colors = [], leafData = [], targetSize = 0;
   
   if (type === "flower") {
-    targetSize = random(50, 100);
-    // 随机梦幻配色方案
-    let r = random(100, 255);
-    let g = random(50, 200);
-    let b = random(150, 255);
-    col = [
-      color(r, g, b, 150),       // 外层
-      color(g, b, r, 180),       // 中层
-      color(b, r, g, 210),       // 内层
-      color(255, 255, 255, 230)  // 核心
-    ];
+    targetSize = random(60, 110);
+    let r = random(150, 255), g = random(50, 200), b = random(180, 255);
+    colors = [color(r,g,b,180), color(b,r,g,200), color(g,b,r,220), color(255,255,255,230)];
   } else if (type === "vine") {
-    targetSize = random(15, 25);
-    if (random() > 0.7) { // 叶子密度控制
-      leafData.push({
-        side: random() > 0.5 ? 1 : -1,
-        size: random(30, 70),
-        angle: random(-PI/4, PI/4),
-        c: color(random(0, 100), 255, random(100, 200), 180)
-      });
+    targetSize = 20;
+    if (random() > 0.8) {
+      leafData.push({ side: random()>0.5?1:-1, size: random(40, 80), angle: random(-0.3, 0.3), c: color(random(0,100), 255, random(100,200), 180)});
     }
   } else if (type === "grass") {
     targetSize = random(80, 130);
-    col = color(0, 255, random(100, 200), 180);
+    colors = color(0, 255, random(100,200), 180);
   } else {
     targetSize = random(20, 35);
-    col = color(255);
   }
-
-  elements.push({ x: x, y: y, type: type, size: 0, maxSize: targetSize, offset: random(1000), colors: col, leaf: leafData });
+  
+  elements.push({ x: x, y: y, type: type, size: 0, maxSize: targetSize, offset: random(1000), colors: colors, leaf: leafData });
 }
 
-// --- 🌸 梦幻 4 层渐变花朵 ---
+// --- 🌸 核心：渐变、生长、呼吸花朵 ---
 function drawFlower(el) {
   if (el.size < el.maxSize) el.size += 2.5;
+  let breath = 1 + sin(frameCount * 0.05 + el.offset) * 0.05;
+  let alphaB = map(sin(frameCount * 0.05 + el.offset), -1, 1, 150, 255);
+
   push();
   translate(el.x - width/2, el.y - height/2, 2);
+  scale(breath);
   noStroke();
-  
-  let layers = 4;
-  for (let l = 0; l < layers; l++) {
-    fill(el.colors[l]);
+  for (let l = 0; l < 4; l++) {
+    let c = el.colors[l];
+    fill(c.levels[0], c.levels[1], c.levels[2], alphaB * (1 - l*0.15));
     let lSize = el.size * (1 - l * 0.22);
     for (let i = 0; i < 6; i++) {
       rotate(PI/3);
@@ -153,42 +144,30 @@ function drawFlower(el) {
   pop();
 }
 
-// --- 🌿 丝滑藤蔓路径 ---
-function drawVinePath() {
-  let vPoints = elements.filter(el => el.type === "vine");
-  if (vPoints.length < 2) return;
-  
-  push();
-  noFill();
-  stroke(0, 255, 180, 150);
-  strokeWeight(6); // 粗细均匀的茎
-  beginShape();
-  curveVertex(vPoints[0].x - width/2, vPoints[0].y - height/2);
-  for (let p of vPoints) {
-    curveVertex(p.x - width/2, p.y - height/2);
+// --- 🌿 核心：丝滑参考版藤蔓 + 柳叶 ---
+function drawVine(el, prevEl) {
+  if (prevEl && prevEl.type === "vine" && dist(el.x, el.y, prevEl.x, prevEl.y) < 85) {
+    push();
+    stroke(0, 255, 200, 180);
+    strokeWeight(5);
+    line(prevEl.x - width/2, prevEl.y - height/2, 0, el.x - width/2, el.y - height/2, 0);
+    
+    // 柳叶形状
+    if (el.leaf.length > 0) {
+      let l = el.leaf[0];
+      push();
+      translate(el.x - width/2, el.y - height/2, 1);
+      rotate(l.side * PI/3 + l.angle);
+      noStroke(); fill(l.c);
+      beginShape();
+      vertex(0, 0);
+      bezierVertex(l.size/3, -l.size/3, l.size/3, -l.size/1.5, 0, -l.size);
+      bezierVertex(-l.size/3, -l.size/1.5, -l.size/3, -l.size/3, 0, 0);
+      endShape(CLOSE);
+      pop();
+    }
+    pop();
   }
-  curveVertex(vPoints[vPoints.length-1].x - width/2, vPoints[vPoints.length-1].y - height/2);
-  endShape();
-  pop();
-}
-
-// --- 🍃 自然柳叶状叶子 ---
-function drawVineLeaves(p) {
-  if (p.leaf.length === 0) return;
-  push();
-  translate(p.x - width/2, p.y - height/2, 1);
-  let l = p.leaf[0];
-  rotate(l.side * PI/3 + l.angle);
-  noStroke();
-  fill(l.c);
-  
-  // 柳叶形状：尖长的椭圆
-  beginShape();
-  vertex(0, 0);
-  bezierVertex(l.size/4, -l.size/2, l.size/4, -l.size, 0, -l.size);
-  bezierVertex(-l.size/4, -l.size, -l.size/4, -l.size/2, 0, 0);
-  endShape(CLOSE);
-  pop();
 }
 
 function drawMagicGrass(el) {
@@ -196,11 +175,9 @@ function drawMagicGrass(el) {
   push();
   translate(el.x - width/2, el.y - height/2, 0);
   let sw = sin(frameCount * 0.04 + el.offset) * 20;
-  fill(el.colors);
-  noStroke();
+  fill(el.colors); noStroke();
   beginShape();
-  vertex(-12, 0);
-  vertex(12, 0);
+  vertex(-12, 0); vertex(12, 0);
   bezierVertex(8, -el.size*0.4, sw, -el.size*0.8, sw, -el.size);
   endShape(CLOSE);
   pop();
@@ -210,24 +187,19 @@ function drawStar(el) {
   if (el.size < el.maxSize) el.size += 0.8;
   push();
   translate(el.x - width/2, el.y - height/2, 1);
-  let b = sin(frameCount * 0.1 + el.offset);
-  tint(255, 255, 200, map(b, -1, 1, 120, 255));
-  imageMode(CENTER);
-  image(imgStar, 0, 0, el.size, el.size);
+  tint(255, 255, 200, map(sin(frameCount*0.1 + el.offset), -1, 1, 120, 255));
+  imageMode(CENTER); image(imgStar, 0, 0, el.size, el.size);
   pop();
 }
 
 function drawButterfly(el) {
-  if (!imgButterfly) return;
   if (el.size < el.maxSize) el.size += 0.5;
-  el.y -= 1.5;
-  el.x += sin(frameCount * 0.05 + el.offset) * 3;
+  el.y -= 1.5; el.x += sin(frameCount * 0.05 + el.offset) * 3;
   push();
   translate(el.x - width/2, el.y - height/2, 10);
   scale(sin(frameCount * 0.2 + el.offset), 1); 
   tint(255, 200, 255, 220);
-  imageMode(CENTER);
-  image(imgButterfly, 0, 0, el.size, el.size);
+  imageMode(CENTER); image(imgButterfly, 0, 0, el.size, el.size);
   pop();
 }
 
@@ -242,8 +214,7 @@ function drawAndIdentifyFireflies() {
     f.x += f.vx; f.y += f.vy;
     if(f.x<0 || f.x>width) f.vx*=-1;
     if(f.y<0 || f.y>height) f.vy*=-1;
-    fill(200, 255, 100, 200); noStroke();
-    circle(f.x, f.y, f.size);
+    fill(200, 255, 100, 200); noStroke(); circle(f.x, f.y, f.size);
   }
   pop();
 }
