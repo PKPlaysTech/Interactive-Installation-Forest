@@ -6,6 +6,7 @@ let capture, hands, myFont;
 let smoothX = 0, smoothY = 0;
 let wasPinching = false;
 let imgStar, imgButterfly;
+let uiLayer; // 关键：独立的 UI 渲染层
 
 function preload() {
   myFont = loadFont('https://cdnjs.cloudflare.com/ajax/libs/topcoat/0.8.0/font/SourceSansPro-Bold.otf');
@@ -15,17 +16,15 @@ function preload() {
 
 function setup() {
   createCanvas(windowWidth, windowHeight, WEBGL);
-  textFont(myFont);
   
+  // 创建一个专门画 UI 的 2D 图层
+  uiLayer = createGraphics(windowWidth, windowHeight);
+  uiLayer.textFont(myFont);
+
   hands = new Hands({
     locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
   });
-  hands.setOptions({ 
-    maxNumHands: 1, 
-    modelComplexity: 0, 
-    minDetectionConfidence: 0.6, 
-    minTrackingConfidence: 0.6 
-  });
+  hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
   hands.onResults(results => { handData = results.multiHandLandmarks; });
 
   capture = createCapture(VIDEO);
@@ -38,6 +37,7 @@ function setup() {
 
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
+  uiLayer.resizeCanvas(windowWidth, windowHeight);
 }
 
 async function processVideo() {
@@ -48,10 +48,7 @@ async function processVideo() {
 function draw() {
   background(5, 5, 15); 
 
-  // --- 1. 绘制 3D 森林场景 ---
-  // 使用透视投影画森林
-  perspective(); 
-  
+  // 1. 绘制 3D 森林
   push();
   translate(0, 0, -500); 
   scale(-2.8, 2.8); 
@@ -72,14 +69,46 @@ function draw() {
     else if (el.type === "grass") drawMagicGrass(el);
   }
 
-  if (elements.length > 350) elements.shift();
-
   handleInput(); 
 
-  // --- 2. 绘制 2D UI 菜单 (核心修复) ---
-  // 使用 ortho() 确保 UI 永远在最上层且不随 3D 旋转
-  ortho(-width/2, width/2, -height/2, height/2, 0, 1000);
-  drawUI(); 
+  // 2. 绘制 UI (在独立的 2D 层上画完，再贴到 3D 画布最前面)
+  updateUILayer();
+  push();
+  translate(-width/2, -height/2, 500); // 放在所有东西最前面
+  image(uiLayer, 0, 0);
+  pop();
+}
+
+function updateUILayer() {
+  uiLayer.clear();
+  let btnH = height / 7;
+  let modes = ["grass", "flower", "vine", "butterfly", "star", "firefly", "clear"];
+  let labels = ["GRASS", "FLOWER", "VINE", "BUTTERFLY", "STAR", "FIREFLY", "CLEAR ALL"];
+  
+  for (let i = 0; i < 7; i++) {
+    let isSelected = (currentMode === modes[i]);
+    
+    // 背景框
+    uiLayer.noStroke();
+    uiLayer.fill(isSelected ? 'rgba(0, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.7)');
+    uiLayer.rect(0, i * btnH, 120, btnH, 0, 15, 15, 0);
+    
+    // 文字 Label (重点修复：大写、亮色、描边)
+    uiLayer.textAlign(CENTER, CENTER);
+    uiLayer.stroke(0); // 黑色描边
+    uiLayer.strokeWeight(3);
+    uiLayer.fill(isSelected ? '#FFFF00' : '#FFFFFF'); // 选中黄色，未选中白色
+    uiLayer.textSize(16);
+    uiLayer.text(labels[i], 60, i * btnH + btnH/2);
+    
+    // 选中状态的边框
+    if (isSelected) {
+      uiLayer.noFill();
+      uiLayer.stroke(255, 255, 0);
+      uiLayer.strokeWeight(4);
+      uiLayer.rect(5, i * btnH + 5, 110, btnH - 10, 10);
+    }
+  }
 }
 
 function handleInput() {
@@ -94,21 +123,19 @@ function handleInput() {
     smoothY += (rawY - smoothY) * 0.25;
     let isPinching = dist(rawX, rawY, thumbX, thumbY) < 45;
 
-    // 引导点 (放在很近的深度，确保可见)
+    // 手指引导球
     push();
-    translate(smoothX, smoothY, 500); 
+    translate(smoothX, smoothY, 510); // 比 UI 还要靠前
     noStroke();
-    fill(isPinching ? color(0, 255, 255) : color(255, 200));
-    circle(0, 0, 15);
+    fill(isPinching ? color(0, 255, 255) : color(255, 255, 0));
+    circle(0, 0, 20);
     pop();
 
     let screenX = smoothX + width / 2;
     let screenY = smoothY + height / 2;
 
-    // 侧边栏检测范围：左侧 110 像素
-    if (screenX < 110) { 
-      let btnH = height / 7;
-      let idx = floor(screenY / btnH);
+    if (screenX < 120) { 
+      let idx = floor(screenY / (height / 7));
       let modes = ["grass", "flower", "vine", "butterfly", "star", "firefly", "clear"];
       if (idx === 6 && isPinching) { elements = []; fireflies = []; }
       else if (idx >= 0 && idx < 6) currentMode = modes[idx];
@@ -123,52 +150,7 @@ function handleInput() {
   }
 }
 
-function drawUI() {
-  push();
-  // 在 ortho 模式下，坐标原点依然在中心，我们需要移到左上角
-  translate(-width/2, -height/2, 600); // 极高的 Z 轴，绝对在最前
-  
-  let icons = ["🌱", "🌸", "🌿", "🦋", "✨", "🔥", "🗑️"];
-  let labels = ["GRASS", "FLOWER", "VINE", "FLY", "STAR", "FIRE", "CLR"];
-  let btnH = height / 7;
-  let btnW = 100; // 加宽一点
-  
-  for (let i = 0; i < 7; i++) {
-    let isSelected = (currentMode === ["grass", "flower", "vine", "butterfly", "star", "firefly", "clear"][i]);
-    
-    // 1. 强力底色：使用深黑色，确保文字跳出来
-    noStroke();
-    fill(0, 0, 0, 180); 
-    rect(0, i * btnH, btnW, btnH);
-    
-    // 2. 选中时的边框亮色
-    if(isSelected) {
-      stroke(255, 255, 0); // 选中的时候用亮黄色边框
-      strokeWeight(3);
-      noFill();
-      rect(5, i * btnH + 5, btnW - 10, btnH - 10, 10);
-    }
-    
-    // 3. 图标文字
-    noStroke();
-    textAlign(CENTER, CENTER);
-    fill(255); // 纯白图标
-    textSize(28); 
-    text(icons[i], btnW/2, i * btnH + btnH/2 - 12);
-    
-    // 4. 文字 Label：加粗、纯白
-    fill(255, 255, 0); // 文字用黄色，对比度最高
-    textSize(10);
-    text(labels[i], btnW/2, i * btnH + btnH/2 + 20);
-  }
-  
-  // 补一条分割线
-  stroke(255, 50);
-  line(btnW, 0, btnW, height);
-  pop();
-}
-
-// --- 后续功能函数保持不变 (createNew, drawStar, drawMagicGrass 等) ---
+// ... 辅助绘制函数 (createNew, drawStar, etc.) 保持不变 ...
 function createNew(x, y, type) { let col, targetSize, angle = 0, side = random(1), hasLeaf = true; let finalX = x, finalY = y; if (type === "star") { finalX = x + random(-50, 50); finalY = y + random(-50, 50); targetSize = random(8, 22); col = color(255); } else if (type === "vine") { let g = [color(57, 255, 20), color(0, 255, 127), color(173, 255, 47)]; col = random(g); targetSize = random(20, 35); } else if (type === "flower") { let p = [color(255,0,127), color(191,0,255), color(0,255,255)]; col = random(p); targetSize = random(30, 50); } else if (type === "grass") { col = color(57, 255, 20); targetSize = random(40, 75); } else { col = color(255); targetSize = random(35, 50); } if (elements.length > 0) { let last = elements[elements.length - 1]; angle = atan2(y - last.y, x - last.x) + HALF_PI; } elements.push({ x: finalX, y: finalY, type: type, size: 0, maxSize: targetSize, offset: random(1000), blinkSpeed: random(0.06, 0.12), angle: angle, c: col, hasLeaf: hasLeaf, side: side, sideOffset: random(15, 35) }); }
 function drawStar(el) { if (!imgStar) return; if (el.size < el.maxSize) el.size += 0.2; push(); translate(el.x - width/2, el.y - height/2, 1); imageMode(CENTER); blendMode(SCREEN); let b = sin(frameCount * el.blinkSpeed + el.offset); tint(255, map(b, -1, 1, 100, 255)); image(imgStar, 0, 0, el.size, el.size); blendMode(BLEND); pop(); }
 function drawMagicGrass(el) { if (el.size < el.maxSize) el.size += 2; push(); translate(el.x - width/2, el.y - height/2, 0); let w = sin(frameCount * 0.06 + el.offset) * 6; for (let i = 0; i < 7; i++) { let h1 = map(i, 0, 7, 0, -el.size); let h2 = map(i+1, 0, 7, 0, -el.size); stroke(lerpColor(color(20,0,80), color(57,255,20), i/7)); strokeWeight(map(i,0,7,4,1)); line(pow(i/7, 2) * w, h1, pow((i+1)/7, 2) * w, h2); } pop(); }
