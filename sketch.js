@@ -133,7 +133,7 @@ function drawUI() {
   // 坐标移至左上角
   translate(-width/2, -height/2, 300); 
   
-  let icons = ["🌱", "🌸", "🌿", "🦋", "✨", "🔥", "🗑️"];
+  let icons = ["Grass", "Flower", "Vine", "Butterfly", "Star", "Firefly", "Clear"];
   let labels = ["Grass", "Flower", "Vine", "Butterfly", "Star", "Firefly", "Clear"];
   let btnH = height / 7; // 按钮高度平分整个屏幕高度
   let btnW = 90;        // 宽度固定为 90
