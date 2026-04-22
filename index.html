@@ -8,9 +8,11 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <style>
-        /* 关键：消除所有边距，让画布占满全屏 */
         body { margin: 0; padding: 0; overflow: hidden; background: #05050f; }
+        /* 强制画布占满屏幕 */
         canvas { display: block !important; width: 100vw !important; height: 100vh !important; }
+        /* 关键：隐藏 p5 自动生成的那个多余的视频方框 */
+        video { display: none !important; }
     </style>
 </head>
 <body>
