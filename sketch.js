@@ -14,7 +14,8 @@ function preload() {
 }
 
 function setup() {
-  createCanvas(640, 480, WEBGL);
+  // --- 修改点：画布自适应窗口大小 ---
+  createCanvas(windowWidth, windowHeight, WEBGL);
   textFont(myFont);
   
   hands = new Hands({
@@ -24,11 +25,16 @@ function setup() {
   hands.onResults(results => { handData = results.multiHandLandmarks; });
 
   capture = createCapture(VIDEO);
-  capture.size(640, 480);
+  capture.size(windowWidth, windowHeight); // 视频也适应窗口
   capture.hide();
   processVideo();
   
   for(let i=0; i<12; i++) createFirefly(random(width), random(height));
+}
+
+// 窗口大小改变时自动重绘，防止拉伸
+function windowResized() {
+  resizeCanvas(windowWidth, windowHeight);
 }
 
 async function processVideo() {
@@ -41,11 +47,11 @@ function draw() {
 
   // 绘制背景视频
   push();
-  translate(0, 0, -200); 
-  scale(-1, 1);
+  translate(0, 0, -400); // 稍微推远，获得更广视野
+  scale(-1.5, 1.5); // 放大以填充全屏
   tint(100, 150, 255, 40); 
   imageMode(CENTER);
-  image(capture, 0, 0, width, height);
+  image(capture, 0, 0);
   pop();
 
   drawAndIdentifyFireflies();
@@ -62,42 +68,36 @@ function draw() {
     else if (el.type === "grass") drawMagicGrass(el);
   }
 
-  if (elements.length > 300) elements.shift();
+  if (elements.length > 400) elements.shift();
 
-  handleInput(); // 处理手势和引导点
+  handleInput(); 
   drawUI();
 }
 
-// --- ✨ 精致小星星：变小了 + 独立呼吸 ---
+// --- ✨ 精致小星星 ---
 function drawStar(el) {
   if (!imgStar) return;
-  if (el.size < el.maxSize) el.size += 0.2; // 生长速度放慢，更优雅
-  
+  if (el.size < el.maxSize) el.size += 0.2;
   push();
   translate(el.x - width/2, el.y - height/2, 1);
   imageMode(CENTER);
   blendMode(SCREEN); 
-  
-  // 呼吸 Function
   let breathe = sin(frameCount * el.blinkSpeed + el.offset);
   let alpha = map(breathe, -1, 1, 120, 255); 
   let scaleMult = map(breathe, -1, 1, 0.85, 1.15); 
-  
-  // 颜色在金黄与纯白间切换
   let starCol = lerpColor(color(255, 215, 0), color(255, 255, 255), map(breathe, -1, 1, 0, 1));
-  
   tint(red(starCol), green(starCol), blue(starCol), alpha);
   image(imgStar, 0, 0, el.size * scaleMult, el.size * scaleMult);
   blendMode(BLEND); 
   pop();
 }
 
-// --- 🧠 核心：精准引导点与手势处理 ---
+// --- 🧠 核心：精准引导点与自适应输入 ---
 function handleInput() {
   if (handData && handData.length > 0) {
     let hand = handData[0];
     
-    // 坐标校准：映射到 WEBGL 中心坐标系
+    // 映射到当前的窗口尺寸
     let rawX = (1 - hand[8].x) * width - width / 2;
     let rawY = hand[8].y * height - height / 2;
     let thumbX = (1 - hand[4].x) * width - width / 2;
@@ -105,25 +105,25 @@ function handleInput() {
 
     smoothX += (rawX - smoothX) * 0.25;
     smoothY += (rawY - smoothY) * 0.25;
-    let isPinching = dist(rawX, rawY, thumbX, thumbY) < 40;
+    let isPinching = dist(rawX, rawY, thumbX, thumbY) < 45;
 
-    // 绘制跟随手指的小点 (在最上层)
+    // 绘制引导点
     push();
-    translate(smoothX, smoothY, 130); 
+    translate(smoothX, smoothY, 150); 
     noStroke();
     if (isPinching) {
-      fill(0, 255, 255); circle(0, 0, 12);
-      fill(255); circle(0, 0, 6); 
+      fill(0, 255, 255); circle(0, 0, 14);
+      fill(255); circle(0, 0, 7); 
     } else {
-      fill(255, 180); circle(0, 0, 8);
+      fill(255, 180); circle(0, 0, 10);
     }
     pop();
 
-    // 转换为 UI 检测坐标 (0-640)
+    // 逻辑坐标转换 (0 to Width)
     let screenX = smoothX + width / 2;
     let screenY = smoothY + height / 2;
 
-    if (screenY < 60) {
+    if (screenY < 80) { // 稍微扩大顶部 UI 的感应范围
       let idx = floor(screenX / (width / 7));
       let modes = ["grass", "flower", "vine", "butterfly", "star", "firefly", "clear"];
       if (idx === 6) { elements = []; fireflies = []; }
@@ -144,10 +144,8 @@ function createNew(x, y, type) {
   let finalX = x, finalY = y;
 
   if (type === "star") {
-    // 星星随机散开
     finalX = x + random(-50, 50);
     finalY = y + random(-50, 50);
-    // 星星调小了：8 到 22 像素
     targetSize = random(8, 22); 
     col = color(255);
   } else if (type === "vine") {
@@ -174,7 +172,6 @@ function createNew(x, y, type) {
   });
 }
 
-// --- 🌿 其他绘制函数 ---
 function drawMagicGrass(el) {
   if (el.size < el.maxSize) el.size += 2;
   push(); translate(el.x - width/2, el.y - height/2, 0);
@@ -255,15 +252,24 @@ function drawButterfly(el) {
 }
 
 function drawUI() {
-  push(); translate(-width/2, -height/2, 110); 
+  push(); 
+  // 关键：固定在屏幕最左上角
+  translate(-width/2, -height/2, 200); 
   let icons = ["🌱", "🌸", "🌿", "🦋", "✨", "🔥", "🗑️"];
   let labels = ["Grass", "Flower", "Vine", "Butterfly", "Star", "Firefly", "Clear"];
   let btnW = width / 7;
   for (let i = 0; i < 7; i++) {
     let isSelected = (currentMode === ["grass", "flower", "vine", "butterfly", "star", "firefly", "clear"][i]);
-    fill(isSelected ? 80 : 20, 200); stroke(0, 255, 255, 100); rect(i * btnW, 0, btnW, 60);
-    fill(255); noStroke(); textAlign(CENTER, CENTER); textSize(18); text(icons[i], i * btnW + btnW/2, 22);
-    textSize(10); text(labels[i], i * btnW + btnW/2, 45);
+    fill(isSelected ? 80 : 20, 200); 
+    stroke(0, 255, 255, 100); 
+    rect(i * btnW, 0, btnW, 75); // 加高一点，更美观
+    fill(255); 
+    noStroke(); 
+    textAlign(CENTER, CENTER); 
+    textSize(width > 600 ? 20 : 15); // 根据屏幕宽度调整字号
+    text(icons[i], i * btnW + btnW/2, 28);
+    textSize(width > 600 ? 11 : 8); 
+    text(labels[i], i * btnW + btnW/2, 55);
   }
   pop();
 }
