@@ -151,7 +151,7 @@ function createNew(x, y, type) {
   let colors = [], leafData = [], targetSize = 0;
 
   if (type === "flower") {
-    targetSize = random(65, 115);
+    targetSize = random(35, 70);
     let h = random(360);
     colorMode(HSB, 360, 100, 100, 1);
     colors = [
@@ -289,7 +289,7 @@ function drawClearFeedback() {
     textAlign(CENTER);
     textFont(myFont);
     textSize(80);
-    text("✨ MAGIC RESET ✨", 0, 0);
+    text(" MAGIC RESET ", 0, 0);
     clearTextAlpha -= 5;
     pop();
   }
