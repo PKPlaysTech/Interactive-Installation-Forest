@@ -151,7 +151,7 @@ function createNew(x, y, type) {
   let colors = [], leafData = [], targetSize = 0;
 
   if (type === "flower") {
-    targetSize = random(40, 80);
+    targetSize = random(25, 80);
     let h = random(360);
     colorMode(HSB, 360, 100, 100, 1);
     colors = [
