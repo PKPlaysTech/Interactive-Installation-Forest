@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AR Discovery Lab - Giant Screen Magic</title>
+    <title>AR Discovery Lab - Magic Forest</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <style>
-        body { margin: 0; padding: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { margin: 0; padding: 0; overflow: hidden; background: #000; font-family: sans-serif; }
         #ui-container {
             position: absolute; left: 30px; top: 50%; transform: translateY(-50%);
             display: flex; flex-direction: column; gap: 15px; z-index: 9999;
@@ -29,12 +29,12 @@
 </head>
 <body>
     <div id="ui-container">
-        <button id="btn-grass" class="menu-btn" onclick="setMode('grass')"> GRASS</button>
-        <button id="btn-flower" class="menu-btn active" onclick="setMode('flower')"> FLOWER</button>
-        <button id="btn-vine" class="menu-btn" onclick="setMode('vine')"> VINE</button>
-        <button id="btn-butterfly" class="menu-btn" onclick="setMode('butterfly')"> BUTTERFLY</button>
-        <button id="btn-star" class="menu-btn" onclick="setMode('star')"> STAR</button>
-        <button id="btn-firefly" class="menu-btn" onclick="setMode('firefly')"> FIREFLY</button>
+        <button id="btn-grass" class="menu-btn" onclick="setMode('grass')">🌱 GRASS</button>
+        <button id="btn-flower" class="menu-btn active" onclick="setMode('flower')">🌸 FLOWER</button>
+        <button id="btn-vine" class="menu-btn" onclick="setMode('vine')">🌿 VINE</button>
+        <button id="btn-butterfly" class="menu-btn" onclick="setMode('butterfly')">🦋 FLY</button>
+        <button id="btn-star" class="menu-btn" onclick="setMode('star')">✨ STAR</button>
+        <button id="btn-firefly" class="menu-btn" onclick="setMode('firefly')">🔥 FIRE</button>
         <button class="menu-btn clear-btn" onclick="clearCanvas()">🗑️ CLEAR ALL</button>
     </div>
     <script src="sketch.js"></script>
